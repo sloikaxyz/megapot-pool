@@ -20,6 +20,12 @@ contract JackpotPoolTest is Test {
     uint256 public constant INITIAL_BALANCE = 10_000_000e6; // 1M tokens with 6 decimals
     uint256 public constant JACKPOT_AMOUNT = 1004466104303; // 1000 tokens with 6 decimals
 
+    event ParticipantTicketPurchase(
+        address indexed participant, uint256 indexed round, uint256 ticketsPurchasedTotalBps
+    );
+    event ParticipantWinWithdrawal(address indexed participant, uint256 indexed round, uint256 payout);
+    event PoolWinWithdrawal(uint256 indexed round, uint256 amount);
+
     function setUp() public {
         // Deploy contracts
         token = new MockToken();
@@ -38,9 +44,13 @@ contract JackpotPoolTest is Test {
 
     function test_PurchaseOneTicket() public {
         uint256 purchaseAmount = TICKET_PRICE;
+        uint256 currentRound = jackpot.lastJackpotEndTime();
 
         vm.startPrank(alice);
         token.approve(address(pool), purchaseAmount);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(alice, currentRound, 9500); // 1 ticket * (10000 - 500) bps
         pool.purchaseTickets(address(0), purchaseAmount, alice);
         vm.stopPrank();
 
@@ -51,9 +61,13 @@ contract JackpotPoolTest is Test {
 
     function test_PurchaseTenTickets() public {
         uint256 purchaseAmount = 10 * TICKET_PRICE;
+        uint256 currentRound = jackpot.lastJackpotEndTime();
 
         vm.startPrank(alice);
         token.approve(address(pool), purchaseAmount);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(alice, currentRound, 95000); // 10 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), purchaseAmount, alice);
         vm.stopPrank();
 
@@ -65,8 +79,13 @@ contract JackpotPoolTest is Test {
     function test_PoolWinsRound() public {
         // Alice buys tickets through the pool
         uint256 aliceTickets = 10 * TICKET_PRICE;
+        uint256 currentRound = jackpot.lastJackpotEndTime();
+
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(alice, currentRound, 95000); // 10 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), aliceTickets, alice);
         vm.stopPrank();
 
@@ -74,8 +93,16 @@ contract JackpotPoolTest is Test {
         jackpot.endRoundWithWinner(address(pool));
 
         // Alice withdraws winnings
-        vm.prank(alice);
+        vm.startPrank(alice);
+
+        vm.expectEmit(true, true, false, true);
+        emit PoolWinWithdrawal(currentRound, JACKPOT_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(alice, currentRound, JACKPOT_AMOUNT);
+
         pool.withdrawParticipantWinnings();
+        vm.stopPrank();
 
         // Verify Alice received full jackpot (since she was the only participant)
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - aliceTickets + JACKPOT_AMOUNT);
@@ -139,8 +166,13 @@ contract JackpotPoolTest is Test {
     function test_MultipleRounds() public {
         // Round 1: Pool wins
         uint256 aliceTickets = 10 * TICKET_PRICE;
+        uint256 round1 = jackpot.lastJackpotEndTime();
+
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(alice, round1, 95000); // 10 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), aliceTickets, alice);
         vm.stopPrank();
 
@@ -148,8 +180,17 @@ contract JackpotPoolTest is Test {
 
         // Round 2: Pool loses
         uint256 bobTickets = 20 * TICKET_PRICE;
+        uint256 round2 = jackpot.lastJackpotEndTime();
+
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
+
+        // Expect the pool to withdraw winnings from the first round before purchasing tickets in the second round
+        vm.expectEmit(true, true, false, true);
+        emit PoolWinWithdrawal(round1, JACKPOT_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(bob, round2, 190000); // 20 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), bobTickets, bob);
         vm.stopPrank();
 
@@ -159,13 +200,19 @@ contract JackpotPoolTest is Test {
 
         jackpot.endRoundWithWinner(charlie);
 
-        // Alice withdraws winnings from both rounds
-        vm.prank(alice);
-        pool.withdrawParticipantWinnings();
+        // Alice withdraws winnings from the first round
+        vm.startPrank(alice);
 
-        // Bob withdraws winnings from both rounds
-        vm.prank(bob);
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(alice, round1, JACKPOT_AMOUNT);
+
         pool.withdrawParticipantWinnings();
+        vm.stopPrank();
+
+        // Bob withdraws no winnings
+        vm.startPrank(bob);
+        pool.withdrawParticipantWinnings(); // No events expected since Bob didn't win anything
+        vm.stopPrank();
 
         // Verify Alice received winnings from round 1 only
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - aliceTickets + JACKPOT_AMOUNT);
@@ -236,14 +283,22 @@ contract JackpotPoolTest is Test {
         // Alice and Bob buy equal amounts of tickets through the pool
         uint256 aliceTickets = 10 * TICKET_PRICE;
         uint256 bobTickets = 10 * TICKET_PRICE;
+        uint256 currentRound = jackpot.lastJackpotEndTime();
+        uint256 expectedWinnings = JACKPOT_AMOUNT / 2;
 
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(alice, currentRound, 95000); // 10 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(bob, currentRound, 95000); // 10 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), bobTickets, bob);
         vm.stopPrank();
 
@@ -251,13 +306,24 @@ contract JackpotPoolTest is Test {
         jackpot.endRoundWithWinner(address(pool));
 
         // Both participants withdraw winnings
-        vm.prank(alice);
+        vm.startPrank(alice);
+
+        vm.expectEmit(true, true, false, true);
+        emit PoolWinWithdrawal(currentRound, JACKPOT_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(alice, currentRound, expectedWinnings);
+
         pool.withdrawParticipantWinnings();
-        vm.prank(bob);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(bob, currentRound, expectedWinnings);
         pool.withdrawParticipantWinnings();
+        vm.stopPrank();
 
         // Verify Alice and Bob each received half of the jackpot (since they had equal tickets)
-        uint256 expectedWinnings = JACKPOT_AMOUNT / 2;
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - aliceTickets + expectedWinnings);
         assertEq(token.balanceOf(bob), INITIAL_BALANCE - bobTickets + expectedWinnings);
     }
@@ -266,14 +332,23 @@ contract JackpotPoolTest is Test {
         // Alice buys 1 ticket and Bob buys 2 tickets through the pool
         uint256 aliceTickets = 1 * TICKET_PRICE;
         uint256 bobTickets = 2 * TICKET_PRICE;
+        uint256 currentRound = jackpot.lastJackpotEndTime();
+        uint256 aliceExpectedWinnings = JACKPOT_AMOUNT / 3;
+        uint256 bobExpectedWinnings = (JACKPOT_AMOUNT * 2) / 3;
 
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(alice, currentRound, 9500); // 1 ticket * (10000 - 500) bps
         pool.purchaseTickets(address(0), aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(bob, currentRound, 19000); // 2 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), bobTickets, bob);
         vm.stopPrank();
 
@@ -281,14 +356,24 @@ contract JackpotPoolTest is Test {
         jackpot.endRoundWithWinner(address(pool));
 
         // Both participants withdraw winnings
-        vm.prank(alice);
-        pool.withdrawParticipantWinnings();
-        vm.prank(bob);
-        pool.withdrawParticipantWinnings();
+        vm.startPrank(alice);
 
-        // Verify Alice received 1/3 and Bob received 2/3 of the jackpot (proportional to tickets)
-        uint256 aliceExpectedWinnings = JACKPOT_AMOUNT / 3;
-        uint256 bobExpectedWinnings = (JACKPOT_AMOUNT * 2) / 3;
+        vm.expectEmit(true, true, false, true);
+        emit PoolWinWithdrawal(currentRound, JACKPOT_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(alice, currentRound, aliceExpectedWinnings);
+
+        pool.withdrawParticipantWinnings();
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(bob, currentRound, bobExpectedWinnings);
+        pool.withdrawParticipantWinnings();
+        vm.stopPrank();
+
+        // Verify proportional winnings distribution
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - aliceTickets + aliceExpectedWinnings);
         assertEq(token.balanceOf(bob), INITIAL_BALANCE - bobTickets + bobExpectedWinnings);
     }
@@ -298,19 +383,32 @@ contract JackpotPoolTest is Test {
         uint256 aliceTickets = 1 * TICKET_PRICE;
         uint256 bobTickets = 2 * TICKET_PRICE;
         uint256 charlieTickets = 3 * TICKET_PRICE;
+        uint256 currentRound = jackpot.lastJackpotEndTime();
+        uint256 aliceExpectedWinnings = JACKPOT_AMOUNT / 6;
+        uint256 bobExpectedWinnings = JACKPOT_AMOUNT / 3;
+        uint256 charlieExpectedWinnings = JACKPOT_AMOUNT / 2;
 
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(alice, currentRound, 9500); // 1 ticket * (10000 - 500) bps
         pool.purchaseTickets(address(0), aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(bob, currentRound, 19000); // 2 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), bobTickets, bob);
         vm.stopPrank();
 
         vm.startPrank(charlie);
         token.approve(address(pool), charlieTickets);
+
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantTicketPurchase(charlie, currentRound, 28500); // 3 tickets * (10000 - 500) bps
         pool.purchaseTickets(address(0), charlieTickets, charlie);
         vm.stopPrank();
 
@@ -318,21 +416,30 @@ contract JackpotPoolTest is Test {
         jackpot.endRoundWithWinner(address(pool));
 
         // All participants withdraw winnings
-        vm.prank(alice);
-        pool.withdrawParticipantWinnings();
-        vm.prank(bob);
-        pool.withdrawParticipantWinnings();
-        vm.prank(charlie);
-        pool.withdrawParticipantWinnings();
+        vm.startPrank(alice);
 
-        // Verify each participant received their proportional share:
-        // Alice: 1/6 (1 ticket out of 6 total)
-        // Bob: 2/6 = 1/3 (2 tickets out of 6 total)
-        // Charlie: 3/6 = 1/2 (3 tickets out of 6 total)
-        uint256 aliceExpectedWinnings = JACKPOT_AMOUNT / 6;
-        uint256 bobExpectedWinnings = JACKPOT_AMOUNT / 3;
-        uint256 charlieExpectedWinnings = JACKPOT_AMOUNT / 2;
+        vm.expectEmit(true, true, false, true);
+        emit PoolWinWithdrawal(currentRound, JACKPOT_AMOUNT);
 
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(alice, currentRound, aliceExpectedWinnings);
+
+        pool.withdrawParticipantWinnings();
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(bob, currentRound, bobExpectedWinnings);
+        pool.withdrawParticipantWinnings();
+        vm.stopPrank();
+
+        vm.startPrank(charlie);
+        vm.expectEmit(true, true, false, true);
+        emit ParticipantWinWithdrawal(charlie, currentRound, charlieExpectedWinnings);
+        pool.withdrawParticipantWinnings();
+        vm.stopPrank();
+
+        // Verify proportional winnings distribution
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - aliceTickets + aliceExpectedWinnings);
         assertEq(token.balanceOf(bob), INITIAL_BALANCE - bobTickets + bobExpectedWinnings);
         assertEq(token.balanceOf(charlie), INITIAL_BALANCE - charlieTickets + charlieExpectedWinnings);
