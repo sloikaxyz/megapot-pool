@@ -17,6 +17,8 @@ interface IBaseJackpotPlay {
     function token() external view returns (address);
     /// price of a ticket in native token units
     function ticketPrice() external view returns (uint256);
+    /// fee bps
+    function feeBps() external view returns (uint256);
     /// round duration in seconds
     function roundDurationInSeconds() external view returns (uint256);
     /// timestamp of the last jackpot end time

@@ -11,9 +11,20 @@ contract JackpotPool {
     using EnumerableMap for EnumerableMap.UintToUintMap;
     using SafeERC20 for IERC20;
 
+    /* -------------------------------------------------------------------------- */
+    /*                                 EVENTS                                   */
+    /* -------------------------------------------------------------------------- */
+    /// @dev emitted when a participant purchases tickets
+    event ParticipantTicketPurchase(
+        address indexed participant, uint256 indexed round, uint256 ticketsPurchasedTotalBps
+    );
+
     /// @dev emitted when a participant withdraws their winnings
     event ParticipantWinWithdrawal(address indexed participant, uint256 indexed round, uint256 payout);
 
+    /* -------------------------------------------------------------------------- */
+    /*                                 STATE VARIABLES                            */
+    /* -------------------------------------------------------------------------- */
     /// @dev jackpot contract
     IBaseJackpotPlay public immutable jackpot;
 
@@ -45,17 +56,23 @@ contract JackpotPool {
         // keep track of round changes
         _syncRound();
 
+        uint256 ticketCount = value / ticketPrice;
+        uint256 ticketsPurchasedBps = ticketCount * (10000 - jackpot.feeBps());
+
         // track tickets purchased in poolTickets, participantTickets
-        poolTickets[currentRound] += value;
-        participantTickets[recipient][currentRound] += value;
+        poolTickets[currentRound] += ticketsPurchasedBps;
+        participantTickets[recipient][currentRound] += ticketsPurchasedBps;
 
         // purchase tickets
+        uint256 jackpotTokenBalanceBefore = poolTicketsPurchasedBps();
         jackpotToken.safeTransferFrom(msg.sender, address(this), value);
         jackpotToken.approve(address(jackpot), value);
         jackpot.purchaseTickets(referrer, value, address(this));
+        require(
+            poolTicketsPurchasedBps() == jackpotTokenBalanceBefore + ticketsPurchasedBps, "incorrect tickets purchased"
+        );
 
-        // TODO: Verify we received the expected amount of userInfo.ticketsPurchasedTotalBps, I guess?
-        // TODO: Emit an event, include recipient, round, value of tickets purchased
+        emit ParticipantTicketPurchase(recipient, currentRound, ticketsPurchasedBps);
     }
 
     function withdrawParticipantWinnings() external {
@@ -66,6 +83,9 @@ contract JackpotPool {
         _withdrawParticipantWinnings(participant_);
     }
 
+    /* -------------------------------------------------------------------------- */
+    /*                                 INTERNAL FUNCTIONS                        */
+    /* -------------------------------------------------------------------------- */
     /// @dev keep track of round changes and check for winnings if round has changed; updates `currentRound`
     function _syncRound() internal {
         uint256 lastJackpotEndTime = jackpot.lastJackpotEndTime();
@@ -123,6 +143,12 @@ contract JackpotPool {
     /* -------------------------------------------------------------------------- */
     /*                             External view helpers                          */
     /* -------------------------------------------------------------------------- */
+    /// Tickets purchased by this pool for the current round.
+    function poolTicketsPurchasedBps() public view returns (uint256) {
+        IBaseJackpotPlay.User memory userInfo = jackpot.usersInfo(address(this));
+        return userInfo.active ? userInfo.ticketsPurchasedTotalBps : 0;
+    }
+
     /// Winnings claimable *inside* BaseJackpot for this pool.
     function pendingPoolWinnings() public view returns (uint256) {
         IBaseJackpotPlay.User memory userInfo = jackpot.usersInfo(address(this));
