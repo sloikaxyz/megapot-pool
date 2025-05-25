@@ -108,7 +108,9 @@ contract JackpotPool {
     }
 
     function _withdrawParticipantWinnings(address participant_) internal {
-        // TODO: Iterate over all round winnings and withdraw due amount.
+        _checkWinnings();
+
+        // iterate over all round the pool won in and withdraw due amount
         uint256 payout = 0;
         for (uint256 i = 0; i < winnings.length(); i++) {
             (uint256 round, uint256 poolWinnings) = winnings.at(i);
