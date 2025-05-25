@@ -444,4 +444,34 @@ contract JackpotPoolTest is Test {
         assertEq(token.balanceOf(bob), INITIAL_BALANCE - bobTickets + bobExpectedWinnings);
         assertEq(token.balanceOf(charlie), INITIAL_BALANCE - charlieTickets + charlieExpectedWinnings);
     }
+
+    function test_NoDoubleWithdraw() public {
+        // Alice buys tickets through the pool
+        uint256 aliceTickets = 10 * TICKET_PRICE;
+
+        vm.startPrank(alice);
+        token.approve(address(pool), aliceTickets);
+        pool.purchaseTickets(address(0), aliceTickets, alice);
+        vm.stopPrank();
+
+        // Set pool as winner and end round
+        jackpot.endRoundWithWinner(address(pool));
+
+        // Alice withdraws winnings first time
+        vm.startPrank(alice);
+        pool.withdrawParticipantWinnings();
+        uint256 aliceBalanceAfterFirstWithdraw = token.balanceOf(alice);
+        vm.stopPrank();
+
+        // Alice attempts to withdraw winnings second time
+        vm.startPrank(alice);
+        pool.withdrawParticipantWinnings();
+        uint256 aliceBalanceAfterSecondWithdraw = token.balanceOf(alice);
+        vm.stopPrank();
+
+        // Verify Alice's balance didn't change after second withdrawal
+        assertEq(aliceBalanceAfterFirstWithdraw, aliceBalanceAfterSecondWithdraw);
+        // Verify final balance is correct (initial - tickets + jackpot)
+        assertEq(aliceBalanceAfterSecondWithdraw, INITIAL_BALANCE - aliceTickets + JACKPOT_AMOUNT);
+    }
 }
