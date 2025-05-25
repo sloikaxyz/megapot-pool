@@ -22,6 +22,9 @@ contract JackpotPool {
     /// @dev emitted when a participant withdraws their winnings
     event ParticipantWinWithdrawal(address indexed participant, uint256 indexed round, uint256 payout);
 
+    /// @dev emitted when the pool withdraws winnings from the jackpot
+    event PoolWinWithdrawal(uint256 indexed round, uint256 amount);
+
     /* -------------------------------------------------------------------------- */
     /*                                 STATE VARIABLES                            */
     /* -------------------------------------------------------------------------- */
@@ -102,9 +105,17 @@ contract JackpotPool {
             // record winnings for the current round
             winnings.set(currentRound, pendingWinnings);
 
-            // TODO: Verify we received the correct amount by comparing the jackpot.token balance before and after the withdraw
-            // TODO: Emit an event, include round, pendingWinnings
+            // get balance before withdrawal
+            uint256 balanceBefore = jackpotToken.balanceOf(address(this));
+
+            // withdraw winnings
             jackpot.withdrawWinnings();
+
+            // verify the balance increased by the expected amount
+            uint256 balanceAfter = jackpotToken.balanceOf(address(this));
+            require(balanceAfter - balanceBefore == pendingWinnings, "incorrect winnings amount withdrawn");
+
+            emit PoolWinWithdrawal(currentRound, pendingWinnings);
         }
     }
 
@@ -124,7 +135,6 @@ contract JackpotPool {
             uint256 roundPayout = (poolWinnings * ticketsPurchased) / poolTickets[round];
 
             // account for any amount already paid out to the participant
-            // TODO: is there a better way to do this?
             uint256 outstandingPayout = roundPayout - participantPayout[participant_][round];
 
             // skip if no payout is due
