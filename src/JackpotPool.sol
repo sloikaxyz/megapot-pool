@@ -31,7 +31,8 @@ contract JackpotPool {
     /// @dev jackpot token
     IERC20 private immutable jackpotToken;
 
-    /// @dev latest round this pool has participated in
+    /// @dev latest round this pool has participated in.
+    /// IMPORTANT: this value must be after withdrawing winnings from the Jackpot and before purchasing tickets.
     uint256 private currentRound;
     /// @dev quantity of tickets purchased by the pool in a given round
     mapping(uint256 => uint256) private poolTickets;
