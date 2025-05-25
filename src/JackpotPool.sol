@@ -57,6 +57,8 @@ contract JackpotPool {
         uint256 ticketPrice = jackpot.ticketPrice();
         require(value > 0 && (value % ticketPrice == 0), "invalid purchase amount");
 
+        // withdraw any pending winnings before purchasing tickets
+        _checkWinnings();
         // keep track of round changes
         _syncRound();
 
@@ -90,12 +92,13 @@ contract JackpotPool {
     /* -------------------------------------------------------------------------- */
     /*                                 INTERNAL FUNCTIONS                        */
     /* -------------------------------------------------------------------------- */
-    /// @dev keep track of round changes and check for winnings if round has changed; updates `currentRound`
+    /// @dev update `currentRound` to track participants' contributions
     function _syncRound() internal {
         uint256 lastJackpotEndTime = jackpot.lastJackpotEndTime();
         if (lastJackpotEndTime != currentRound) {
-            _checkWinnings();
             currentRound = lastJackpotEndTime;
+            // revert if attempting to update currentRound while there are pending winnings
+            require(pendingPoolWinnings() == 0, "pool has pending winnings");
         }
     }
 
