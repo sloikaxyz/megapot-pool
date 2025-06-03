@@ -16,7 +16,7 @@ contract JackpotPool {
     /* -------------------------------------------------------------------------- */
     /// @dev emitted when a participant purchases tickets
     event ParticipantTicketPurchase(
-        address indexed participant, uint256 indexed round, uint256 ticketsPurchasedTotalBps
+        address indexed participant, uint256 indexed round, uint256 ticketsPurchasedTotalBps, address indexed referrer
     );
 
     /// @dev emitted when a participant withdraws their winnings
@@ -35,7 +35,7 @@ contract JackpotPool {
     IERC20 private immutable jackpotToken;
 
     /// @dev latest round this pool has participated in.
-    /// IMPORTANT: this value must be after withdrawing winnings from the Jackpot and before purchasing tickets.
+    /// IMPORTANT: this value must be updated after withdrawing winnings from the Jackpot and before purchasing tickets.
     uint256 private currentRound;
     /// @dev quantity of tickets purchased by the pool in a given round
     mapping(uint256 => uint256) private poolTickets;
@@ -78,7 +78,7 @@ contract JackpotPool {
             poolTicketsPurchasedBps() == jackpotTokenBalanceBefore + ticketsPurchasedBps, "incorrect tickets purchased"
         );
 
-        emit ParticipantTicketPurchase(recipient, currentRound, ticketsPurchasedBps);
+        emit ParticipantTicketPurchase(recipient, currentRound, ticketsPurchasedBps, referrer);
     }
 
     function withdrawParticipantWinnings() external {

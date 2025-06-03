@@ -15,13 +15,14 @@ contract JackpotPoolTest is Test {
     address public alice = address(0x1);
     address public bob = address(0x2);
     address public charlie = address(0x3);
+    address public dave = address(0x4);
 
     uint256 public constant TICKET_PRICE = 1e6; // 1 token with 6 decimals
     uint256 public constant INITIAL_BALANCE = 10_000_000e6; // 1M tokens with 6 decimals
     uint256 public constant JACKPOT_AMOUNT = 1004466104303; // 1000 tokens with 6 decimals
 
     event ParticipantTicketPurchase(
-        address indexed participant, uint256 indexed round, uint256 ticketsPurchasedTotalBps
+        address indexed participant, uint256 indexed round, uint256 ticketsPurchasedTotalBps, address indexed referrer
     );
     event ParticipantWinWithdrawal(address indexed participant, uint256 indexed round, uint256 payout);
     event PoolWinWithdrawal(uint256 indexed round, uint256 amount);
@@ -50,8 +51,8 @@ contract JackpotPoolTest is Test {
         token.approve(address(pool), purchaseAmount);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(alice, currentRound, 9500); // 1 ticket * (10000 - 500) bps
-        pool.purchaseTickets(address(0), purchaseAmount, alice);
+        emit ParticipantTicketPurchase(alice, currentRound, 9500, bob);
+        pool.purchaseTickets(bob, purchaseAmount, alice);
         vm.stopPrank();
 
         // Verify tickets were purchased
@@ -67,8 +68,8 @@ contract JackpotPoolTest is Test {
         token.approve(address(pool), purchaseAmount);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(alice, currentRound, 95000); // 10 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), purchaseAmount, alice);
+        emit ParticipantTicketPurchase(alice, currentRound, 95000, charlie);
+        pool.purchaseTickets(charlie, purchaseAmount, alice);
         vm.stopPrank();
 
         // Verify tickets were purchased
@@ -85,8 +86,8 @@ contract JackpotPoolTest is Test {
         token.approve(address(pool), aliceTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(alice, currentRound, 95000); // 10 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        emit ParticipantTicketPurchase(alice, currentRound, 95000, bob);
+        pool.purchaseTickets(bob, aliceTickets, alice);
         vm.stopPrank();
 
         // Set pool as winner and end round
@@ -113,7 +114,7 @@ contract JackpotPoolTest is Test {
         uint256 aliceTickets = 10 * TICKET_PRICE;
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        pool.purchaseTickets(bob, aliceTickets, alice);
         vm.stopPrank();
 
         // Set external winner and end round
@@ -134,19 +135,19 @@ contract JackpotPoolTest is Test {
 
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        pool.purchaseTickets(bob, aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
-        pool.purchaseTickets(address(0), bobTickets, bob);
+        pool.purchaseTickets(alice, bobTickets, bob);
         vm.stopPrank();
 
         // Charlie buys tickets directly from jackpot
         uint256 charlieTickets = 30 * TICKET_PRICE;
         vm.startPrank(charlie);
         token.approve(address(jackpot), charlieTickets);
-        jackpot.purchaseTickets(address(0), charlieTickets, charlie);
+        jackpot.purchaseTickets(bob, charlieTickets, charlie);
         vm.stopPrank();
 
         // Set Charlie as winner and end round
@@ -172,8 +173,8 @@ contract JackpotPoolTest is Test {
         token.approve(address(pool), aliceTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(alice, round1, 95000); // 10 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        emit ParticipantTicketPurchase(alice, round1, 95000, bob);
+        pool.purchaseTickets(bob, aliceTickets, alice);
         vm.stopPrank();
 
         jackpot.endRoundWithWinner(address(pool));
@@ -190,8 +191,8 @@ contract JackpotPoolTest is Test {
         emit PoolWinWithdrawal(round1, JACKPOT_AMOUNT);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(bob, round2, 190000); // 20 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), bobTickets, bob);
+        emit ParticipantTicketPurchase(bob, round2, 190000, alice);
+        pool.purchaseTickets(alice, bobTickets, bob);
         vm.stopPrank();
 
         // Need to fund the jackpot for the second round
@@ -227,12 +228,12 @@ contract JackpotPoolTest is Test {
 
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        pool.purchaseTickets(bob, aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
-        pool.purchaseTickets(address(0), bobTickets, bob);
+        pool.purchaseTickets(alice, bobTickets, bob);
         vm.stopPrank();
 
         // Pool wins round 1
@@ -250,7 +251,7 @@ contract JackpotPoolTest is Test {
         // Charlie participates directly in jackpot
         vm.startPrank(charlie);
         token.approve(address(jackpot), TICKET_PRICE);
-        jackpot.purchaseTickets(address(0), TICKET_PRICE, charlie);
+        jackpot.purchaseTickets(bob, TICKET_PRICE, charlie);
         vm.stopPrank();
 
         jackpot.endRoundWithWinner(address(0));
@@ -263,7 +264,7 @@ contract JackpotPoolTest is Test {
         // Charlie participates again
         vm.startPrank(charlie);
         token.approve(address(jackpot), TICKET_PRICE);
-        jackpot.purchaseTickets(address(0), TICKET_PRICE, charlie);
+        jackpot.purchaseTickets(bob, TICKET_PRICE, charlie);
         vm.stopPrank();
 
         jackpot.endRoundWithWinner(charlie);
@@ -290,16 +291,16 @@ contract JackpotPoolTest is Test {
         token.approve(address(pool), aliceTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(alice, currentRound, 95000); // 10 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        emit ParticipantTicketPurchase(alice, currentRound, 95000, dave);
+        pool.purchaseTickets(dave, aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(bob, currentRound, 95000); // 10 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), bobTickets, bob);
+        emit ParticipantTicketPurchase(bob, currentRound, 95000, alice);
+        pool.purchaseTickets(alice, bobTickets, bob);
         vm.stopPrank();
 
         // Set pool as winner and end round
@@ -340,16 +341,16 @@ contract JackpotPoolTest is Test {
         token.approve(address(pool), aliceTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(alice, currentRound, 9500); // 1 ticket * (10000 - 500) bps
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        emit ParticipantTicketPurchase(alice, currentRound, 9500, charlie);
+        pool.purchaseTickets(charlie, aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(bob, currentRound, 19000); // 2 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), bobTickets, bob);
+        emit ParticipantTicketPurchase(bob, currentRound, 19000, alice);
+        pool.purchaseTickets(alice, bobTickets, bob);
         vm.stopPrank();
 
         // Set pool as winner and end round
@@ -392,24 +393,24 @@ contract JackpotPoolTest is Test {
         token.approve(address(pool), aliceTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(alice, currentRound, 9500); // 1 ticket * (10000 - 500) bps
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        emit ParticipantTicketPurchase(alice, currentRound, 9500, charlie);
+        pool.purchaseTickets(charlie, aliceTickets, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(pool), bobTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(bob, currentRound, 19000); // 2 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), bobTickets, bob);
+        emit ParticipantTicketPurchase(bob, currentRound, 19000, alice);
+        pool.purchaseTickets(alice, bobTickets, bob);
         vm.stopPrank();
 
         vm.startPrank(charlie);
         token.approve(address(pool), charlieTickets);
 
         vm.expectEmit(true, true, false, true);
-        emit ParticipantTicketPurchase(charlie, currentRound, 28500); // 3 tickets * (10000 - 500) bps
-        pool.purchaseTickets(address(0), charlieTickets, charlie);
+        emit ParticipantTicketPurchase(charlie, currentRound, 28500, bob);
+        pool.purchaseTickets(bob, charlieTickets, charlie);
         vm.stopPrank();
 
         // Set pool as winner and end round
@@ -451,7 +452,7 @@ contract JackpotPoolTest is Test {
 
         vm.startPrank(alice);
         token.approve(address(pool), aliceTickets);
-        pool.purchaseTickets(address(0), aliceTickets, alice);
+        pool.purchaseTickets(bob, aliceTickets, alice);
         vm.stopPrank();
 
         // Set pool as winner and end round
