@@ -9,10 +9,18 @@ import {IJackpotPoolFactory} from "./interfaces/IJackpotPoolFactory.sol";
 contract JackpotPoolFactory is IJackpotPoolFactory {
     /// @inheritdoc IJackpotPoolFactory
     function createPool(address jackpot_, bytes32 salt_) external returns (address pool) {
+        // Check if pool already exists at this address
+        bytes32 combinedSalt = _getSalt(jackpot_, msg.sender, salt_);
+        address predictedAddress = Create2.computeAddress(
+            combinedSalt, keccak256(abi.encodePacked(type(JackpotPool).creationCode, abi.encode(jackpot_, msg.sender)))
+        );
+
+        require(predictedAddress.code.length == 0, "Pool already exists");
+
         // Create the pool with CREATE2 for deterministic address
         pool = Create2.deploy(
             0, // no value sent
-            _getSalt(jackpot_, msg.sender, salt_),
+            combinedSalt,
             abi.encodePacked(type(JackpotPool).creationCode, abi.encode(jackpot_, msg.sender))
         );
 

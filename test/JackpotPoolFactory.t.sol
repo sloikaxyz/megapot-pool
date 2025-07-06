@@ -233,7 +233,7 @@ contract JackpotPoolFactoryTest is Test {
 
         // Try to create second pool with same parameters - should revert
         vm.prank(alice);
-        vm.expectRevert();
+        vm.expectRevert("Pool already exists");
         factory.createPool(address(jackpot), salt);
     }
 
