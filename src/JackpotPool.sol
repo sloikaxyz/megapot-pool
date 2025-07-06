@@ -28,6 +28,9 @@ contract JackpotPool {
     /* -------------------------------------------------------------------------- */
     /*                                 STATE VARIABLES                            */
     /* -------------------------------------------------------------------------- */
+    /// @dev owner of this pool (creator)
+    address public immutable owner;
+
     /// @dev jackpot contract
     IBaseJackpotPlay public immutable jackpot;
 
@@ -47,7 +50,8 @@ contract JackpotPool {
     /// @dev participantPayout[participant][round] = amount already paid out to the participant
     mapping(address => mapping(uint256 => uint256)) private participantPayout;
 
-    constructor(address jackpot_) {
+    constructor(address jackpot_, address owner_) {
+        owner = owner_;
         jackpot = IBaseJackpotPlay(jackpot_);
         jackpotToken = IERC20(jackpot.token());
         currentRound = jackpot.lastJackpotEndTime();

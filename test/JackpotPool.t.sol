@@ -31,7 +31,7 @@ contract JackpotPoolTest is Test {
         // Deploy contracts
         token = new MockToken();
         jackpot = new MockJackpot(address(token));
-        pool = new JackpotPool(address(jackpot));
+        pool = new JackpotPool(address(jackpot), address(this));
 
         // Fund test accounts
         token.transfer(alice, INITIAL_BALANCE);
